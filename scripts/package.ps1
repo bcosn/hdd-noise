@@ -107,7 +107,7 @@ try {
         throw 'The EXE changed during packaging. Stop concurrent builds/signing and retry.'
     }
     if (Test-Path -LiteralPath $zipPath -PathType Leaf) {
-        [IO.File]::Replace($temporaryZip, $zipPath, $null)
+        [IO.File]::Replace($temporaryZip, $zipPath, [System.Management.Automation.Language.NullString]::Value)
     } else {
         [IO.File]::Move($temporaryZip, $zipPath)
     }

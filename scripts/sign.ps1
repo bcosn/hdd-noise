@@ -176,7 +176,7 @@ try {
 
     # The temporary file is a sibling, so replacement stays on one filesystem.
     # A lock or replacement failure leaves the original in place and is an error.
-    [System.IO.File]::Replace($stagingPath, $inputPath, $null)
+    [System.IO.File]::Replace($stagingPath, $inputPath, [System.Management.Automation.Language.NullString]::Value)
     $verified = Assert-ReleaseSignature -FilePath $inputPath -ExpectedThumbprint $thumbprint
     [pscustomobject]@{
         Path = $inputPath
