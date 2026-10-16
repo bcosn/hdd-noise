@@ -36,6 +36,27 @@
 - 图标有多种尺寸，随窗口 DPI 更新；Windows 可能将新图标放入托盘折叠区域。
 - 注册失败时保持窗口可用并重试，不会把唯一控制窗口永久藏起来。便携程序移动位置导致 GUID 注册失败时，使用窗口标识作为兼容方式。
 
+### 提示“托盘暂不可用”或“受限运行状态”
+
+有些受限开发环境会给目录和新生成的 EXE 继承低完整性标签。Windows 会按 EXE 自身与启动者两者中较低的完整性级别创建进程，因此从资源管理器双击也可能受限，不能向正常桌面的 Explorer 注册托盘。这不是缺少管理员权限，也不需要关闭 UAC。原理见 [Microsoft 的完整性控制说明](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control)。
+
+优先将 GitHub 构建包解压到普通用户文件夹后运行。本地构建遇到这种情况时，退出旧程序，在普通桌面 PowerShell 中运行：
+
+```powershell
+./scripts/prepare-desktop.ps1 -Executable ./out/hdd-noise.exe
+# 如果使用根目录的副本，改为 -Executable ./hdd-noise.exe
+```
+
+此脚本只给指定的本项目 EXE 设置普通桌面运行标签，不修改文件内容、目录权限、UAC 或系统信任设置。不要对整个项目目录递归修改权限。已启动的受限进程不会因此改变身份，需要退出后重新运行。
+
+导出实际运行程序的托盘诊断（无声音）：
+
+```powershell
+./out/hdd-noise.exe --diagnose-tray ./tray-diagnostic.txt
+```
+
+诊断中的 `trayAdded=1` 表示真实注册成功，`version4=1` 表示已启用新版回调；`processIntegrity=4096` 表示低完整性，通常的桌面进程为 8192 或更高。注册失败时窗口保留可用，状态栏给出原因并自动重试。
+
 图标为本项目原创，SVG、PNG 和多尺寸 ICO 位于 `assets/`。`tools/generate_icon.py` 可用 Pillow 重新生成 ICO/PNG；正常编译和运行无需 Python。
 
 ## 声音如何生成

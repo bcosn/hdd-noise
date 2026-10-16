@@ -10,7 +10,7 @@ script records the actual Windows signature result; it does not sign files.
 param(
     [string]$Executable = 'out/hdd-noise.exe',
     [string]$Destination = 'out/release',
-    [string]$Version = '0.1.0'
+    [string]$Version = '0.1.1'
 )
 
 Set-StrictMode -Version Latest
@@ -74,6 +74,7 @@ $files = [ordered]@{
     'SOUND-DESIGN.md' = Join-Path $projectRoot 'SOUND-DESIGN.md'
     'docs/SIGNING.md' = Join-Path $projectRoot 'docs/SIGNING.md'
     'docs/RELEASING.md' = Join-Path $projectRoot 'docs/RELEASING.md'
+    'scripts/prepare-desktop.ps1' = Join-Path $projectRoot 'scripts/prepare-desktop.ps1'
 }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'LICENSE') -PathType Leaf) {
     $files['LICENSE'] = Join-Path $projectRoot 'LICENSE'

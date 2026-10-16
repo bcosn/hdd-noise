@@ -11,9 +11,9 @@
 3. 从 `VERSION` 读取版本，通过 `scripts/package.ps1` 生成 ZIP 与 `SHA256SUMS.txt`。
 4. 在该次 Actions 运行的 Artifacts 区域保存 `hdd-noise-windows-x64-unsigned-…`，保留 30 天。下载后，外层 Actions 压缩包中包含实际分发 ZIP 和校验文件。
 
-`VERSION` 使用 `0.1.0` 或 `0.1.0-beta.1` 这类格式。所有第三方 Actions 均来自 GitHub 官方 `actions` 组织，并固定到完整提交 SHA；升级时应核对官方发行记录与对应提交，而不是只替换版本注释。
+`VERSION` 使用 `0.1.1` 或 `0.1.1-beta.1` 这类格式。所有第三方 Actions 均来自 GitHub 官方 `actions` 组织，并固定到完整提交 SHA；升级时应核对官方发行记录与对应提交，而不是只替换版本注释。
 
-打包使用明确的文件清单：程序、README、声音设计说明、签名与发布说明，以及记录版本和签名状态的 `release-info.json`。图标、清单和版本资源已编译进 EXE。用户自己的 `hdd-noise.ini`、录音参考、音频分析文件、构建依赖、证书与私钥均不放入分发包。
+打包使用明确的文件清单：程序、README、声音设计说明、签名与发布说明，以及记录版本和签名状态的 `release-info.json`。另包含 `scripts/prepare-desktop.ps1`，用于修复受限开发目录给本地 EXE 继承的低完整性标签。图标、清单和版本资源已编译进 EXE。用户自己的 `hdd-noise.ini`、录音参考、音频分析文件、构建依赖、证书与私钥均不放入分发包。
 
 ## GitHub 构建来源证明
 
@@ -24,7 +24,7 @@ pull request、标签及非默认分支构建只生成普通构建产物，不�
 来源证明用于核验 ZIP 来自哪个仓库、提交和构建流程；它不是 EXE 的 Windows 发布者签名，也不会让 Windows 自动信任该程序。下载实际分发 ZIP 后，可使用 GitHub CLI 检验，使用本项目仓库名称：
 
 ```powershell
-gh attestation verify .\hdd-noise-0.1.0-windows-x64.zip --repo bcosn/hdd-noise
+gh attestation verify .\hdd-noise-0.1.1-windows-x64.zip --repo bcosn/hdd-noise
 ```
 
 请在 Actions 中查看证明任务成功后的摘要及证明记录。未运行或失败的证明任务不能当作已完成证明。
@@ -48,7 +48,7 @@ $releaseVersion = (Get-Content -LiteralPath VERSION -Raw).Trim()
 在存放 ZIP 与 `SHA256SUMS.txt` 的文件夹中运行以下命令，并将版本号换成实际下载的版本：
 
 ```powershell
-$packageName = 'hdd-noise-0.1.0-windows-x64.zip'
+$packageName = 'hdd-noise-0.1.1-windows-x64.zip'
 $checksumPattern = '^([0-9A-Fa-f]{64}) [ *]' + [regex]::Escape($packageName) + '$'
 $checksumLine = @(Get-Content -LiteralPath .\SHA256SUMS.txt | Where-Object { $_ -match $checksumPattern })
 if ($checksumLine.Count -ne 1) { throw '校验文件中没有唯一对应的 ZIP 记录。' }

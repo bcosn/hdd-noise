@@ -21,7 +21,7 @@ exit /b 1
 :msvc
 rc /nologo /c65001 /fo build\App.res App.rc
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++17 /utf-8 /EHsc /O2 /W4 /MT /DUNICODE /D_UNICODE /DNOMINMAX /Fo:build\ App.cpp Synth.cpp AudioEngine.cpp DiskMonitor.cpp build\App.res /Fe:%OUTPUT% /link /SUBSYSTEM:WINDOWS /MANIFEST:EMBED /MANIFESTINPUT:app.manifest user32.lib gdi32.lib shell32.lib comctl32.lib winmm.lib pdh.lib
+cl /nologo /std:c++17 /utf-8 /EHsc /O2 /W4 /MT /DUNICODE /D_UNICODE /DNOMINMAX /Fo:build\ App.cpp Synth.cpp AudioEngine.cpp DiskMonitor.cpp build\App.res /Fe:%OUTPUT% /link /SUBSYSTEM:WINDOWS /MANIFEST:EMBED /MANIFESTINPUT:app.manifest user32.lib gdi32.lib shell32.lib comctl32.lib winmm.lib pdh.lib advapi32.lib
 if errorlevel 1 exit /b 1
 if /i "%~1"=="test" (
     cl /nologo /std:c++17 /utf-8 /EHsc /O2 /W4 /MT /I. /Fo:build\ tests\SynthTests.cpp Synth.cpp /Fe:build\SynthTests.exe
@@ -41,7 +41,7 @@ windres -c 65001 -i App.rc -o build\App-resource.o
 if errorlevel 1 exit /b 1
 windres -c 65001 -i MinGWManifest.rc -o build\App-manifest.o
 if errorlevel 1 exit /b 1
-g++ -std=c++17 -O2 -Wall -Wextra -municode -mwindows -DUNICODE -D_UNICODE -DNOMINMAX App.cpp Synth.cpp AudioEngine.cpp DiskMonitor.cpp build\App-resource.o build\App-manifest.o -o %OUTPUT% -lwinmm -lpdh -lcomctl32 -lshell32 -lgdi32 -luser32 -static
+g++ -std=c++17 -O2 -Wall -Wextra -municode -mwindows -DUNICODE -D_UNICODE -DNOMINMAX App.cpp Synth.cpp AudioEngine.cpp DiskMonitor.cpp build\App-resource.o build\App-manifest.o -o %OUTPUT% -lwinmm -lpdh -lcomctl32 -lshell32 -lgdi32 -luser32 -ladvapi32 -static
 if errorlevel 1 exit /b 1
 if /i "%~1"=="test" (
     g++ -std=c++17 -O2 -I. tests\SynthTests.cpp Synth.cpp -o build\SynthTests.exe -static

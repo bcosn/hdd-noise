@@ -31,6 +31,7 @@
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "advapi32.lib")
 
 namespace {
 constexpr wchar_t kClass[] = L"hdd-noiseWindow";
@@ -52,7 +53,8 @@ HICON g_smallIcon{};
 // Stable identity preserves the user's notification-area visibility preference.
 GUID g_trayGuid{0x5c240dd7,0x8226,0x4422,{0x96,0x5e,0x42,0x10,0x38,0x7b,0x68,0xa1}};
 bool g_trayVersion4=false, g_trayUseGuid=true;
-std::wstring g_trayTip;
+std::wstring g_trayTip,g_trayNotice;
+DWORD g_trayError=ERROR_SUCCESS;
 ULONGLONG g_nextTrayRefresh{},g_trayMissingSince{};
 double g_unmuteVolume=.35;
 std::vector<Control> g_controls;
@@ -204,6 +206,28 @@ std::wstring TrayTip() {
     return L"机械硬盘 · "+state+L"\n"+Fixed(g_snapshot.rpm)+L" RPM  磁盘活动 "+
         (g_sample.available?Fixed(g_sample.busy*100)+L"%":L"—")+L"\n单击打开，右键菜单";
 }
+DWORD ProcessIntegrityRid() {
+    HANDLE token{};
+    if(!OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token))return MAXDWORD;
+    DWORD needed=0;
+    GetTokenInformation(token,TokenIntegrityLevel,nullptr,0,&needed);
+    std::vector<BYTE> buffer(needed);
+    const bool read=needed&&GetTokenInformation(token,TokenIntegrityLevel,buffer.data(),needed,&needed);
+    CloseHandle(token);
+    if(!read)return MAXDWORD;
+    const auto label=reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data());
+    PSID sid=label->Label.Sid;
+    if(!IsValidSid(sid)||!(*GetSidSubAuthorityCount(sid)))return MAXDWORD;
+    return *GetSidSubAuthority(sid,*GetSidSubAuthorityCount(sid)-1);
+}
+std::wstring TrayFailureMessage() {
+    if(ProcessIntegrityRid()<SECURITY_MANDATORY_MEDIUM_RID)
+        return L"程序处于 Windows 受限运行状态，无法使用托盘。请将发行包解压到普通文件夹后运行，或参见 README 的托盘排查说明。";
+    if(!FindWindowW(L"Shell_TrayWnd",nullptr))
+        return L"Windows 任务栏尚未就绪，正在重试；窗口会保持可用。";
+    return L"托盘注册失败"+(g_trayError?L"（系统代码 "+std::to_wstring(g_trayError)+L"）":L"。")+
+        L"窗口会保持可用并重试；可用 --diagnose-tray 导出诊断。";
+}
 NOTIFYICONDATAW TrayData() {
     NOTIFYICONDATAW n{};n.cbSize=sizeof(n);n.hWnd=g_window;n.uID=1;
     if(g_trayUseGuid){n.uFlags=NIF_GUID;n.guidItem=g_trayGuid;}return n;
@@ -214,20 +238,27 @@ void SetTray(bool add) {
     n.uFlags|=NIF_ICON|NIF_MESSAGE|NIF_TIP|NIF_SHOWTIP;
     n.uCallbackMessage=kTray;n.hIcon=g_smallIcon;
     const auto tip=TrayTip();wcsncpy_s(n.szTip,tip.c_str(),_TRUNCATE);
-    if(g_trayAdded&&Shell_NotifyIconW(NIM_MODIFY,&n)){g_trayTip=tip;return;}
+    if(g_trayAdded&&Shell_NotifyIconW(NIM_MODIFY,&n)){g_trayTip=tip;g_trayError=0;g_trayNotice.clear();return;}
+    SetLastError(ERROR_SUCCESS);
     g_trayAdded=Shell_NotifyIconW(NIM_ADD,&n)!=FALSE;
+    g_trayError=g_trayAdded?ERROR_SUCCESS:GetLastError();
     // Windows binds GUID icons to an executable path. Portable unsigned builds
     // can move; fall back to the window/uID identity when GUID registration fails.
     if(!g_trayAdded&&g_trayUseGuid){
         g_trayUseGuid=false;n.uFlags&=~NIF_GUID;
+        SetLastError(ERROR_SUCCESS);
         g_trayAdded=Shell_NotifyIconW(NIM_ADD,&n)!=FALSE;
+        g_trayError=g_trayAdded?ERROR_SUCCESS:GetLastError();
     }
     g_trayVersion4=false;
     if(g_trayAdded){
         n.uVersion=NOTIFYICON_VERSION_4;
         g_trayVersion4=Shell_NotifyIconW(NIM_SETVERSION,&n)!=FALSE;
-        g_trayTip=tip;g_trayMissingSince=0;
-    }else if(!g_trayMissingSince)g_trayMissingSince=GetTickCount64();
+        g_trayTip=tip;g_trayMissingSince=0;g_trayNotice.clear();
+    }else{
+        if(!g_trayMissingSince)g_trayMissingSince=GetTickCount64();
+        g_trayNotice=TrayFailureMessage();
+    }
 }
 void RefreshTray() {
     const auto now=GetTickCount64();if(now<g_nextTrayRefresh)return;
@@ -318,6 +349,7 @@ void UpdateStatus() {
         Fixed(g_sample.bytesPerSecond/1048576.0,1)+L" MiB/s" : L"传输：—    吞吐：—");
     std::wstring notice;
     if (!g_notice.empty()) notice=g_notice;
+    else if (!g_trayNotice.empty()) notice=g_trayNotice;
     else if (!g_snapshot.available && !g_snapshot.error.empty()) notice=g_snapshot.error;
     else if (!g_sample.available) notice=g_sample.status;
     else notice=L"脉冲声为间歇短脉冲；设置自动保存。";
@@ -432,7 +464,7 @@ LRESULT CALLBACK WindowProc(HWND window,UINT msg,WPARAM wp,LPARAM lp) {
         if(code==BN_CLICKED){
             if(id==Power)SetRunning(!g_running);
             if(id==TestSeek)g_audio.triggerSeek();if(id==TestImpact)g_audio.triggerImpact();
-            if(id==Hide){SetTray(true);if(g_trayAdded)ShowWindow(window,SW_HIDE);else g_notice=L"托盘暂不可用，请使用窗口上的最小化按钮。";}
+            if(id==Hide){SetTray(true);if(g_trayAdded)ShowWindow(window,SW_HIDE);UpdateStatus();}
             if(id==Quit)BeginExit();
             if(id==Random){g_settings.randomImpacts=SendMessageW(C(Random),BM_GETCHECK,0,0)==BST_CHECKED;Changed();}
             if(id==PulseToggle){g_settings.pulseNoise=SendMessageW(C(PulseToggle),BM_GETCHECK,0,0)==BST_CHECKED;Changed();}
@@ -491,6 +523,28 @@ int RenderDemo(const std::filesystem::path& path,const std::wstring& mode=L"wd")
             int16_t pcm=static_cast<int16_t>(std::lround(std::clamp(v,-1.0f,1.0f)*32767));u16(static_cast<uint16_t>(pcm));}
     }return f?0:3;
 }
+// Test the actual executable's launch identity and shell access without audio.
+int TrayDiagnostic(const std::filesystem::path& path) {
+    g_instance=GetModuleHandleW(nullptr);
+    WNDCLASSW wc{};wc.hInstance=g_instance;wc.lpfnWndProc=DefWindowProcW;
+    wc.lpszClassName=L"hdd-noise.TrayDiagnostic";
+    if(!RegisterClassW(&wc))return 5;
+    g_window=CreateWindowExW(WS_EX_TOOLWINDOW,wc.lpszClassName,L"hdd-noise tray diagnostic",
+        WS_POPUP,-32000,-32000,1,1,nullptr,nullptr,g_instance,nullptr);
+    // Use a distinct identity so diagnostics never replace a running app icon.
+    g_trayGuid.Data1^=GetCurrentProcessId();g_trayGuid.Data4[7]=0xed;
+    const bool icons=g_window&&LoadAppIcons();
+    if(icons)SetTray(true);
+    const bool added=g_trayAdded;
+    std::ofstream out(path,std::ios::binary);
+    out<<"processIntegrity="<<ProcessIntegrityRid()<<"\nicons="<<icons<<"\ntrayAdded="<<added
+       <<"\nversion4="<<g_trayVersion4<<"\nwin32Error="<<g_trayError<<"\n";
+    SetTray(false);
+    if(g_window)DestroyWindow(g_window);g_window=nullptr;
+    if(g_icon)DestroyIcon(g_icon);g_icon=nullptr;
+    if(g_smallIcon)DestroyIcon(g_smallIcon);g_smallIcon=nullptr;
+    return added&&out?0:5;
+}
 int MonitorDiagnostic(const std::filesystem::path& path) {
     hdd::DiskMonitor monitor;monitor.start();hdd::DiskSample sample;
     for(int i=0;i<50;++i){Sleep(100);sample=monitor.sample();if(sample.available)break;}
@@ -504,6 +558,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int show) {
     int argc=0;LPWSTR* argv=CommandLineToArgvW(GetCommandLineW(),&argc);
     if(argv&&argc>=2){std::wstring arg=argv[1];
         if(arg==L"--render-demo"){int result=RenderDemo(argc>=3?argv[2]:L"hdd-noise-demo.wav",argc>=4?argv[3]:L"wd");LocalFree(argv);return result;}
+        if(arg==L"--diagnose-tray"){int result=TrayDiagnostic(argc>=3?argv[2]:L"tray-diagnostic.txt");LocalFree(argv);return result;}
         if(arg==L"--diagnose-monitor"){int result=MonitorDiagnostic(argc>=3?argv[2]:L"monitor-diagnostic.txt");LocalFree(argv);return result;}
     }
     bool trayOnly=argv&&argc>=2&&std::wstring(argv[1])==L"--tray";if(argv)LocalFree(argv);

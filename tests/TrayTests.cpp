@@ -24,7 +24,7 @@ int main(){
         g_instance=GetModuleHandleW(nullptr);
         WNDCLASSW wc{};wc.hInstance=g_instance;wc.lpfnWndProc=WindowProc;wc.lpszClassName=L"HddNoiseTrayProbe";
         RequireProbe(RegisterClassW(&wc)!=0,"probe class registration");
-        g_window=CreateWindowExW(0,wc.lpszClassName,L"hdd-noise tray validation",WS_OVERLAPPED,0,0,32,32,nullptr,nullptr,g_instance,nullptr);
+        g_window=CreateWindowExW(0,wc.lpszClassName,L"hdd-noise tray validation",WS_OVERLAPPED,-32000,-32000,32,32,nullptr,nullptr,g_instance,nullptr);
         RequireProbe(g_window!=nullptr,"hidden probe window");
         KillTimer(g_window,1);
         RequireProbe(SendMessageW(C(Profile),CB_GETCOUNT,0,0)==4,"four profile choices");
@@ -54,6 +54,11 @@ int main(){
         NOTIFYICONIDENTIFIER identifier{};identifier.cbSize=sizeof(identifier);identifier.hWnd=g_window;identifier.uID=1;if(g_trayUseGuid)identifier.guidItem=g_trayGuid;
         RECT rect{};RequireProbe(SUCCEEDED(Shell_NotifyIconGetRect(&identifier,&rect)),"notification icon bounds");
         RequireProbe(rect.right>rect.left&&rect.bottom>rect.top,"nonempty tray icon bounds");
+        WindowProc(g_window,WM_SIZE,SIZE_MINIMIZED,0);
+        RequireProbe(!IsWindowVisible(g_window),"minimize hides to registered tray");
+        WindowProc(g_window,kTray,0,MAKELPARAM(NIN_SELECT,1));
+        RequireProbe(IsWindowVisible(g_window),"tray selection restores panel");
+        ShowWindow(g_window,SW_HIDE);
         g_settings.master=0;SetTray(true);
         RequireProbe(g_trayAdded&&g_trayTip.find(L"\u9759\u97f3")!=std::wstring::npos,"tooltip modify");
         SetTray(false);PumpProbe();

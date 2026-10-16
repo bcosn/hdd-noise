@@ -22,7 +22,7 @@ BEGIN
             VALUE "InternalName", "hdd-noise\0"
             VALUE "OriginalFilename", "hdd-noise.exe\0"
             VALUE "ProductName", "hdd-noise\0"
-            VALUE "ProductVersion", "0.1.0\0"
+            VALUE "ProductVersion", "0.1.1\0"
         END
     END
     BLOCK "VarFileInfo"
