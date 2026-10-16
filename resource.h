@@ -1,0 +1,8 @@
+#pragma once
+
+#define IDI_APP 101
+#define APP_VERSION_MAJOR 0
+#define APP_VERSION_MINOR 1
+#define APP_VERSION_PATCH 0
+#define APP_VERSION_BUILD 0
+#define APP_VERSION_TEXT "0.1.0.0"
